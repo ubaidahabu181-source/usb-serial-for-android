@@ -1,409 +1,230 @@
-package com.hoho.android.usbserial.examples;
 
-import android.app.PendingIntent;
-import android.content.BroadcastReceiver;
-import android.content.Context;
-import android.content.Intent;
-import android.content.IntentFilter;
-import android.hardware.usb.UsbDevice;
-import android.hardware.usb.UsbDeviceConnection;
-import android.hardware.usb.UsbManager;
-import android.os.Build;
+package de.kai_morich.simple_usb_terminal;
+
+import android.app.AlertDialog;
+import android.graphics.Color;
 import android.os.Bundle;
-import android.os.Handler;
-import android.os.Looper;
-import android.text.Spannable;
-import android.text.SpannableStringBuilder;
-import android.text.method.ScrollingMovementMethod;
-import android.text.style.ForegroundColorSpan;
+import android.text.Editable;
 import android.view.LayoutInflater;
-import android.view.Menu;
-import android.view.MenuInflater;
-import android.view.MenuItem;
 import android.view.View;
 import android.view.ViewGroup;
+import android.widget.Button;
+import android.widget.EditText;
+import android.widget.LinearLayout;
+import android.widget.ProgressBar;
 import android.widget.TextView;
 import android.widget.Toast;
-import android.widget.ToggleButton;
-
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
-import androidx.core.content.ContextCompat;
 import androidx.fragment.app.Fragment;
-
-import com.hoho.android.usbserial.driver.UsbSerialDriver;
-import com.hoho.android.usbserial.driver.UsbSerialPort;
-import com.hoho.android.usbserial.driver.UsbSerialProber;
-import com.hoho.android.usbserial.util.HexDump;
-import com.hoho.android.usbserial.util.SerialInputOutputManager;
-
-import java.io.IOException;
 import java.util.Arrays;
-import java.util.EnumSet;
 
-public class TerminalFragment extends Fragment implements SerialInputOutputManager.Listener {
+public class TerminalFragment extends Fragment implements SerialListener {
 
-    private enum UsbPermission { Unknown, Requested, Granted, Denied }
+    private final int[] RPM_GRID = {500,700,900,1100,1300,1500,1800,2200,2600,3000,3500,4000,4500,5000,5750,6500};
+    private final int[] MAP_GRID = {20,25,30,35,40,45,50,55,60,65,70,75,80,85,92,100};
+    
+    private TextView receiveText, rpmValue, mapValue, advValue, statusText, limiterText, dfcoText, liveCellInfo;
+    private ProgressBar rpmBar;
+    private EditText sendText;
+    private LinearLayout mapTableContainer;
+    private Button btnGet, btnSave, btnLoad, sendBtn;
+    
+    private int[][] advMap = new int[16][16];
+    private int currentRpm = 0, currentMap = 45, currentAdv = 16;
+    private String buffer = "";
 
-    private static final String INTENT_ACTION_GRANT_USB = BuildConfig.APPLICATION_ID + ".GRANT_USB";
-    private static final int WRITE_WAIT_MILLIS = 2000;
-    private static final int READ_WAIT_MILLIS = 2000;
-
-    private int deviceId, portNum, baudRate;
-    private boolean withIoManager;
-
-    private final BroadcastReceiver broadcastReceiver;
-    private final Handler mainLooper;
-    private TextView receiveText;
-    private ControlLines controlLines;
-
-    private SerialInputOutputManager usbIoManager;
-    private UsbSerialPort usbSerialPort;
-    private UsbPermission usbPermission = UsbPermission.Unknown;
-    private boolean connected = false;
-
-    public TerminalFragment() {
-        broadcastReceiver = new BroadcastReceiver() {
-            @Override
-            public void onReceive(Context context, Intent intent) {
-                if(INTENT_ACTION_GRANT_USB.equals(intent.getAction())) {
-                    usbPermission = intent.getBooleanExtra(UsbManager.EXTRA_PERMISSION_GRANTED, false)
-                            ? UsbPermission.Granted : UsbPermission.Denied;
-                    connect();
-                }
-            }
-        };
-        mainLooper = new Handler(Looper.getMainLooper());
-    }
-
-    /*
-     * Lifecycle
-     */
-    @Override
-    public void onCreate(@Nullable Bundle savedInstanceState) {
-        super.onCreate(savedInstanceState);
-        setHasOptionsMenu(true);
-        setRetainInstance(true);
-        deviceId = getArguments().getInt("device");
-        portNum = getArguments().getInt("port");
-        baudRate = getArguments().getInt("baud");
-        withIoManager = getArguments().getBoolean("withIoManager");
-    }
-
-    @Override
-    public void onStart() {
-        super.onStart();
-        ContextCompat.registerReceiver(getActivity(), broadcastReceiver, new IntentFilter(INTENT_ACTION_GRANT_USB), ContextCompat.RECEIVER_NOT_EXPORTED);
-    }
-
-    @Override
-    public void onStop() {
-        getActivity().unregisterReceiver(broadcastReceiver);
-        super.onStop();
-    }
-
-    @Override
-    public void onResume() {
-        super.onResume();
-        if(!connected && (usbPermission == UsbPermission.Unknown || usbPermission == UsbPermission.Granted))
-            mainLooper.post(this::connect);
-    }
-
-    @Override
-    public void onPause() {
-        if(connected) {
-            status("disconnected");
-            disconnect();
-        }
-        super.onPause();
-    }
-
-    /*
-     * UI
-     */
     @Override
     public View onCreateView(@NonNull LayoutInflater inflater, ViewGroup container, Bundle savedInstanceState) {
         View view = inflater.inflate(R.layout.fragment_terminal, container, false);
-        receiveText = view.findViewById(R.id.receive_text);                          // TextView performance decreases with number of spans
-        receiveText.setTextColor(getResources().getColor(R.color.colorReceiveText)); // set as default color to reduce number of spans
-        receiveText.setMovementMethod(ScrollingMovementMethod.getInstance());
-        TextView sendText = view.findViewById(R.id.send_text);
-        View sendBtn = view.findViewById(R.id.send_btn);
-        sendBtn.setOnClickListener(v -> send(sendText.getText().toString()));
-        View receiveBtn = view.findViewById(R.id.receive_btn);
-        controlLines = new ControlLines(view);
-        if(withIoManager) {
-            receiveBtn.setVisibility(View.GONE);
-        } else {
-            receiveBtn.setOnClickListener(v -> read());
-        }
+        receiveText = view.findViewById(R.id.receive_text);
+        rpmValue = view.findViewById(R.id.rpmValue);
+        mapValue = view.findViewById(R.id.mapValue);
+        advValue = view.findViewById(R.id.advValue);
+        statusText = view.findViewById(R.id.statusText);
+        limiterText = view.findViewById(R.id.limiterText);
+        dfcoText = view.findViewById(R.id.dfcoText);
+        liveCellInfo = view.findViewById(R.id.liveCellInfo);
+        rpmBar = view.findViewById(R.id.rpmBar);
+        sendText = view.findViewById(R.id.send_text);
+        sendBtn = view.findViewById(R.id.send_btn);
+        btnGet = view.findViewById(R.id.btnGet);
+        btnSave = view.findViewById(R.id.btnSave);
+        btnLoad = view.findViewById(R.id.btnLoad);
+        mapTableContainer = view.findViewById(R.id.mapTableContainer);
+
+        // Default map from V7.4 BOS
+        int[][] defaultMap = {
+          {16,16,19,25,28,30,32,33,34,33,32,30,29,27,25,24},
+          {15,15,18,24,27,28,30,32,32,32,30,29,28,26,24,23},
+          {14,14,17,22,26,27,29,30,31,30,29,28,27,25,23,22},
+          {14,14,16,21,24,26,28,29,30,29,28,27,26,24,22,21},
+          {13,13,15,20,23,24,26,28,28,28,27,26,25,24,22,20},
+          {13,13,15,19,22,23,25,26,27,26,26,25,24,23,21,19},
+          {13,12,14,18,20,22,24,25,26,25,24,24,23,22,20,19},
+          {12,12,13,17,19,20,22,23,24,24,23,23,22,22,20,18},
+          {12,11,13,16,18,19,20,22,22,22,22,22,22,21,20,18},
+          {12,11,12,15,16,17,19,20,21,21,21,21,21,21,19,18},
+          {11,11,12,14,15,16,17,19,19,20,20,20,20,20,19,17},
+          {11,10,11,13,14,15,16,17,18,19,19,19,19,19,18,16},
+          {11,10,11,12,13,14,15,16,17,17,18,19,19,19,17,16},
+          {11,10,10,12,13,13,14,15,16,17,17,18,18,18,17,15},
+          {10,9,10,11,12,12,13,14,15,16,16,17,17,17,16,15},
+          {10,9,9,10,11,11,12,13,14,14,15,16,16,17,15,14}
+        };
+        for(int i=0;i<16;i++) advMap[i]=Arrays.copyOf(defaultMap[i],16);
+        
+        buildMapTable();
+
+        btnGet.setOnClickListener(v -> send("$GET\n"));
+        btnSave.setOnClickListener(v -> send("$SAVE\n"));
+        btnLoad.setOnClickListener(v -> send("$LOAD\n"));
+        sendBtn.setOnClickListener(v -> {
+            String cmd = sendText.getText().toString();
+            if(!cmd.endsWith("\n")) cmd+="\n";
+            send(cmd);
+        });
+
         return view;
     }
 
-    @Override
-    public void onCreateOptionsMenu(@NonNull Menu menu, MenuInflater inflater) {
-        inflater.inflate(R.menu.menu_terminal, menu);
+    private void buildMapTable() {
+        mapTableContainer.removeAllViews();
+        // Header RPM
+        LinearLayout header = new LinearLayout(getContext());
+        header.setOrientation(LinearLayout.HORIZONTAL);
+        TextView corner = new TextView(getContext()); corner.setText("MAP\RPM "); corner.setWidth(160); corner.setTextColor(Color.GRAY); corner.setTextSize(9);
+        header.addView(corner);
+        for(int c=0;c<16;c++){ TextView tv=new TextView(getContext()); tv.setText(String.valueOf(RPM_GRID[c])); tv.setWidth(90); tv.setTextColor(Color.GRAY); tv.setTextSize(9); header.addView(tv);}
+        mapTableContainer.addView(header);
+
+        for(int r=0;r<16;r++){
+            LinearLayout row = new LinearLayout(getContext());
+            row.setOrientation(LinearLayout.HORIZONTAL);
+            TextView label = new TextView(getContext()); label.setText(MAP_GRID[r]+"kPa "); label.setWidth(160); label.setTextColor(Color.CYAN); label.setTextSize(10);
+            row.addView(label);
+            for(int c=0;c<16;c++){
+                TextView cell = new TextView(getContext());
+                cell.setText(String.valueOf(advMap[r][c]));
+                cell.setWidth(90); cell.setHeight(70);
+                cell.setTextColor(Color.WHITE); cell.setTextSize(11);
+                cell.setGravity(17); cell.setPadding(4,4,4,4);
+                int val = advMap[r][c];
+                if(val<13) cell.setBackgroundColor(Color.parseColor("#1A3A2A"));
+                else if(val<20) cell.setBackgroundColor(Color.parseColor("#2A5A1A"));
+                else if(val<27) cell.setBackgroundColor(Color.parseColor("#8A6A00"));
+                else cell.setBackgroundColor(Color.parseColor("#8A2A00"));
+                cell.setTag(r+","+c);
+                final int fr=r, fc=c;
+                cell.setOnClickListener(v -> showEditDialog(fr,fc));
+                row.addView(cell);
+            }
+            mapTableContainer.addView(row);
+        }
+    }
+
+    private void showEditDialog(int r, int c){
+        EditText input = new EditText(getContext());
+        input.setText(String.valueOf(advMap[r][c]));
+        input.setInputType(2);
+        new AlertDialog.Builder(getContext())
+            .setTitle("Edit ADV ["+MAP_GRID[r]+"kPa , "+RPM_GRID[c]+"RPM] REAL DEG")
+            .setView(input)
+            .setPositiveButton("SET", (d,w)->{
+                try{
+                    int v=Integer.parseInt(input.getText().toString());
+                    if(v>=0&&v<=50){
+                        advMap[r][c]=v;
+                        buildMapTable();
+                        send("$SET,"+r+","+c+","+v+"\n");
+                    }
+                }catch(Exception e){}
+            }).setNegativeButton("Batal",null).show();
+    }
+
+    private void send(String s){
+        try{
+            MainActivity activity = (MainActivity)getActivity();
+            if(activity!=null && activity.serialService!=null){
+                activity.serialService.write(s.getBytes());
+                receiveText.append("[TX] "+s);
+            }
+        }catch(Exception e){ Toast.makeText(getContext(),"Not connected",Toast.LENGTH_SHORT).show();}
     }
 
     @Override
-    public boolean onOptionsItemSelected(MenuItem item) {
-        int id = item.getItemId();
-        if (id == R.id.clear) {
-            receiveText.setText("");
-            return true;
-        } else if( id == R.id.send_break) {
-            if(!connected) {
-                Toast.makeText(getActivity(), "not connected", Toast.LENGTH_SHORT).show();
+    public void onSerialRead(byte[] data){
+        String chunk = new String(data);
+        buffer+=chunk;
+        // Process line by line
+        int idx;
+        while((idx=buffer.indexOf("\n"))>=0 || (idx=buffer.indexOf("*\n"))>=0 || buffer.contains("*")){
+            String line;
+            if(buffer.contains("\n")){
+                line=buffer.substring(0,buffer.indexOf("\n")+1);
+                buffer=buffer.substring(buffer.indexOf("\n")+1);
             } else {
-                try {
-                    usbSerialPort.setBreak(true);
-                    Thread.sleep(100); // should show progress bar instead of blocking UI thread
-                    usbSerialPort.setBreak(false);
-                    SpannableStringBuilder spn = new SpannableStringBuilder();
-                    spn.append("send <break>\n");
-                    spn.setSpan(new ForegroundColorSpan(getResources().getColor(R.color.colorSendText)), 0, spn.length(), Spannable.SPAN_EXCLUSIVE_EXCLUSIVE);
-                    receiveText.append(spn);
-                } catch(UnsupportedOperationException ignored) {
-                    Toast.makeText(getActivity(), "BREAK not supported", Toast.LENGTH_SHORT).show();
-                } catch(Exception e) {
-                    Toast.makeText(getActivity(), "BREAK failed: " + e.getMessage(), Toast.LENGTH_SHORT).show();
-                }
+                line=buffer; buffer="";
             }
-            return true;
-        } else {
-            return super.onOptionsItemSelected(item);
+            line=line.trim();
+            if(line.isEmpty()) continue;
+            String finalLine=line;
+            if(getActivity()!=null) getActivity().runOnUiThread(()->handleLine(finalLine));
         }
     }
 
-    /*
-     * Serial
-     */
-    @Override
-    public void onNewData(byte[] data) {
-        mainLooper.post(() -> {
-            receive(data);
-        });
-    }
+    private void handleLine(String line){
+        receiveText.append(line+"\n");
+        // Auto scroll
+        // Keep only last 5000 chars
+        if(receiveText.getText().length()>8000) receiveText.setText(receiveText.getText().subSequence(receiveText.getText().length()-6000, receiveText.getText().length()));
 
-    @Override
-    public void onRunError(Exception e) {
-        mainLooper.post(() -> {
-            status("connection lost: " + e.getMessage());
-            disconnect();
-        });
-    }
-
-    /*
-     * Serial + UI
-     */
-    private void connect() {
-        UsbDevice device = null;
-        UsbManager usbManager = (UsbManager) getActivity().getSystemService(Context.USB_SERVICE);
-        for(UsbDevice v : usbManager.getDeviceList().values())
-            if(v.getDeviceId() == deviceId)
-                device = v;
-        if(device == null) {
-            status("connection failed: device not found");
-            return;
-        }
-        UsbSerialDriver driver = UsbSerialProber.getDefaultProber().probeDevice(device);
-        if(driver == null) {
-            driver = CustomProber.getCustomProber().probeDevice(device);
-        }
-        if(driver == null) {
-            status("connection failed: no driver for device");
-            return;
-        }
-        if(portNum >= driver.getPorts().size()) {
-            status("connection failed: not enough ports at device");
-            return;
-        }
-        usbSerialPort = driver.getPorts().get(portNum);
-        UsbDeviceConnection usbConnection = usbManager.openDevice(driver.getDevice());
-        if(usbConnection == null && usbPermission == UsbPermission.Unknown && !usbManager.hasPermission(driver.getDevice())) {
-            usbPermission = UsbPermission.Requested;
-            int flags = Build.VERSION.SDK_INT >= Build.VERSION_CODES.M ? PendingIntent.FLAG_MUTABLE : 0;
-            Intent intent = new Intent(INTENT_ACTION_GRANT_USB);
-            intent.setPackage(getActivity().getPackageName());
-            PendingIntent usbPermissionIntent = PendingIntent.getBroadcast(getActivity(), 0, intent, flags);
-            usbManager.requestPermission(driver.getDevice(), usbPermissionIntent);
-            return;
-        }
-        if(usbConnection == null) {
-            if (!usbManager.hasPermission(driver.getDevice()))
-                status("connection failed: permission denied");
-            else
-                status("connection failed: open failed");
-            return;
-        }
-
-        try {
-            usbSerialPort.open(usbConnection);
+        if(line.startsWith("$OK,RPM,")){
             try{
-                usbSerialPort.setParameters(baudRate, 8, 1, UsbSerialPort.PARITY_NONE);
-            }catch (UnsupportedOperationException e){
-                status("unsupport setparameters");
-            }
-            if(withIoManager) {
-                usbIoManager = new SerialInputOutputManager(usbSerialPort, this);
-                usbIoManager.start();
-            }
-            status("connected");
-            connected = true;
-            controlLines.start();
-        } catch (Exception e) {
-            status("connection failed: " + e.getMessage());
-            disconnect();
+                // $OK,RPM,1240,MAP,45,ADV,19*
+                line=line.replace("$OK,","").replace("*","");
+                String[] p=line.split(",");
+                for(int i=0;i<p.length-1;i++){
+                    if(p[i].equals("RPM")) currentRpm=Integer.parseInt(p[i+1]);
+                    if(p[i].equals("MAP")) currentMap=Integer.parseInt(p[i+1]);
+                    if(p[i].equals("ADV")) currentAdv=Integer.parseInt(p[i+1]);
+                }
+                rpmValue.setText(String.valueOf(currentRpm));
+                rpmBar.setProgress(Math.min(currentRpm,6500));
+                mapValue.setText(currentMap+" kPa");
+                advValue.setText(currentAdv+"°");
+                statusText.setText("CONNECTED"); statusText.setTextColor(Color.parseColor("#00FF88"));
+
+                // Limiter logic display
+                if(currentRpm>=6500) limiterText.setText("LIMITER: ACTIVE!"); else if(currentRpm>=6200) limiterText.setText("LIMIT: CUTBACK");
+                else limiterText.setText("LIMIT: NORMAL 6500");
+
+                if(currentMap<30 && currentRpm>1600) dfcoText.setText("DFCO: ON"); else dfcoText.setText("DFCO: OFF");
+
+                // Find live cell
+                int rIdx=0,cIdx=0;
+                for(int i=0;i<15;i++) if(currentMap>=MAP_GRID[i] && currentMap<MAP_GRID[i+1]) {rIdx=i; break;}
+                for(int i=0;i<15;i++) if(currentRpm>=RPM_GRID[i] && currentRpm<RPM_GRID[i+1]) {cIdx=i; break;}
+                liveCellInfo.setText("Live Cell: RPM "+RPM_GRID[cIdx]+" / MAP "+MAP_GRID[rIdx]+" kPa -> Row "+rIdx+" Col "+cIdx+" = "+advMap[rIdx][cIdx]+"° | Real ADV: "+currentAdv+"°");
+
+            }catch(Exception e){}
+        } else if(line.startsWith("$MAPR,")){
+            try{
+                line=line.replace("*","").replace("$MAPR,","");
+                String[] p=line.split(",");
+                int row=Integer.parseInt(p[0]);
+                for(int c=0;c<16 && c+1<p.length;c++){
+                    advMap[row][c]=Integer.parseInt(p[c+1]);
+                }
+                buildMapTable();
+            }catch(Exception e){}
+        } else if(line.contains("SAVE_DONE")){
+            Toast.makeText(getContext(),"Map Saved to EEPROM!",Toast.LENGTH_SHORT).show();
         }
     }
 
-    private void disconnect() {
-        connected = false;
-        controlLines.stop();
-        if(usbIoManager != null) {
-            usbIoManager.setListener(null);
-            usbIoManager.stop();
-        }
-        usbIoManager = null;
-        try {
-            usbSerialPort.close();
-        } catch (IOException ignored) {}
-        usbSerialPort = null;
-    }
-
-    private void send(String str) {
-        if(!connected) {
-            Toast.makeText(getActivity(), "not connected", Toast.LENGTH_SHORT).show();
-            return;
-        }
-        try {
-        byte[] data = (str + '\n').getBytes();
-            SpannableStringBuilder spn = new SpannableStringBuilder();
-            spn.append("send " + data.length + " bytes\n");
-            spn.append(HexDump.dumpHexString(data)).append("\n");
-            spn.setSpan(new ForegroundColorSpan(getResources().getColor(R.color.colorSendText)), 0, spn.length(), Spannable.SPAN_EXCLUSIVE_EXCLUSIVE);
-            receiveText.append(spn);
-            usbSerialPort.write(data, WRITE_WAIT_MILLIS);
-        } catch (Exception e) {
-            onRunError(e);
-        }
-    }
-
-    private void read() {
-        if(!connected) {
-            Toast.makeText(getActivity(), "not connected", Toast.LENGTH_SHORT).show();
-            return;
-        }
-        try {
-            byte[] buffer = new byte[8192];
-            int len = usbSerialPort.read(buffer, READ_WAIT_MILLIS);
-            receive(Arrays.copyOf(buffer, len));
-        } catch (IOException e) {
-            // when using read with timeout, USB bulkTransfer returns -1 on timeout _and_ errors
-            // like connection loss, so there is typically no exception thrown here on error
-            status("connection lost: " + e.getMessage());
-            disconnect();
-        }
-    }
-
-    private void receive(byte[] data) {
-        SpannableStringBuilder spn = new SpannableStringBuilder();
-        spn.append("receive " + data.length + " bytes\n");
-        if(data.length > 0)
-            spn.append(HexDump.dumpHexString(data)).append("\n");
-        receiveText.append(spn);
-    }
-
-    void status(String str) {
-        SpannableStringBuilder spn = new SpannableStringBuilder(str+'\n');
-        spn.setSpan(new ForegroundColorSpan(getResources().getColor(R.color.colorStatusText)), 0, spn.length(), Spannable.SPAN_EXCLUSIVE_EXCLUSIVE);
-        receiveText.append(spn);
-    }
-
-    class ControlLines {
-        private static final int refreshInterval = 200; // msec
-
-        private final Runnable runnable;
-        private final ToggleButton rtsBtn, ctsBtn, dtrBtn, dsrBtn, cdBtn, riBtn;
-
-        ControlLines(View view) {
-            runnable = this::run; // w/o explicit Runnable, a new lambda would be created on each postDelayed, which would not be found again by removeCallbacks
-
-            rtsBtn = view.findViewById(R.id.controlLineRts);
-            ctsBtn = view.findViewById(R.id.controlLineCts);
-            dtrBtn = view.findViewById(R.id.controlLineDtr);
-            dsrBtn = view.findViewById(R.id.controlLineDsr);
-            cdBtn = view.findViewById(R.id.controlLineCd);
-            riBtn = view.findViewById(R.id.controlLineRi);
-            rtsBtn.setOnClickListener(this::toggle);
-            dtrBtn.setOnClickListener(this::toggle);
-        }
-
-        private void toggle(View v) {
-            ToggleButton btn = (ToggleButton) v;
-            if (!connected) {
-                btn.setChecked(!btn.isChecked());
-                Toast.makeText(getActivity(), "not connected", Toast.LENGTH_SHORT).show();
-                return;
-            }
-            String ctrl = "";
-            try {
-                if (btn.equals(rtsBtn)) { ctrl = "RTS"; usbSerialPort.setRTS(btn.isChecked()); }
-                if (btn.equals(dtrBtn)) { ctrl = "DTR"; usbSerialPort.setDTR(btn.isChecked()); }
-            } catch (IOException e) {
-                status("set" + ctrl + "() failed: " + e.getMessage());
-            }
-        }
-
-        private void run() {
-            if (!connected)
-                return;
-            try {
-                EnumSet<UsbSerialPort.ControlLine> controlLines = usbSerialPort.getControlLines();
-                rtsBtn.setChecked(controlLines.contains(UsbSerialPort.ControlLine.RTS));
-                ctsBtn.setChecked(controlLines.contains(UsbSerialPort.ControlLine.CTS));
-                dtrBtn.setChecked(controlLines.contains(UsbSerialPort.ControlLine.DTR));
-                dsrBtn.setChecked(controlLines.contains(UsbSerialPort.ControlLine.DSR));
-                cdBtn.setChecked(controlLines.contains(UsbSerialPort.ControlLine.CD));
-                riBtn.setChecked(controlLines.contains(UsbSerialPort.ControlLine.RI));
-                mainLooper.postDelayed(runnable, refreshInterval);
-            } catch (Exception e) {
-                status("getControlLines() failed: " + e.getMessage() + " -> stopped control line refresh");
-            }
-        }
-
-        void start() {
-            if (!connected)
-                return;
-            try {
-                EnumSet<UsbSerialPort.ControlLine> controlLines = usbSerialPort.getSupportedControlLines();
-                if (!controlLines.contains(UsbSerialPort.ControlLine.RTS)) rtsBtn.setVisibility(View.INVISIBLE);
-                if (!controlLines.contains(UsbSerialPort.ControlLine.CTS)) ctsBtn.setVisibility(View.INVISIBLE);
-                if (!controlLines.contains(UsbSerialPort.ControlLine.DTR)) dtrBtn.setVisibility(View.INVISIBLE);
-                if (!controlLines.contains(UsbSerialPort.ControlLine.DSR)) dsrBtn.setVisibility(View.INVISIBLE);
-                if (!controlLines.contains(UsbSerialPort.ControlLine.CD))   cdBtn.setVisibility(View.INVISIBLE);
-                if (!controlLines.contains(UsbSerialPort.ControlLine.RI))   riBtn.setVisibility(View.INVISIBLE);
-                run();
-            } catch (Exception e) {
-                Toast.makeText(getActivity(), "getSupportedControlLines() failed: " + e.getMessage(), Toast.LENGTH_SHORT).show();
-                rtsBtn.setVisibility(View.INVISIBLE);
-                ctsBtn.setVisibility(View.INVISIBLE);
-                dtrBtn.setVisibility(View.INVISIBLE);
-                dsrBtn.setVisibility(View.INVISIBLE);
-                cdBtn.setVisibility(View.INVISIBLE);
-                cdBtn.setVisibility(View.INVISIBLE);
-                riBtn.setVisibility(View.INVISIBLE);
-            }
-        }
-
-        void stop() {
-            mainLooper.removeCallbacks(runnable);
-            rtsBtn.setChecked(false);
-            ctsBtn.setChecked(false);
-            dtrBtn.setChecked(false);
-            dsrBtn.setChecked(false);
-            cdBtn.setChecked(false);
-            riBtn.setChecked(false);
-        }
-    }
+    @Override public void onSerialIoError(Exception e){ if(getActivity()!=null) getActivity().runOnUiThread(()->{ statusText.setText("IO ERROR"); statusText.setTextColor(Color.RED);});}
+    @Override public void onSerialConnect(){ if(getActivity()!=null) getActivity().runOnUiThread(()->{ statusText.setText("CONNECTED"); statusText.setTextColor(Color.parseColor("#00FF88"));});}
+    @Override public void onSerialConnectError(Exception e){ statusText.setText("CONNECT ERR");}
+    @Override public void onSerialDisconnect(){ statusText.setText("DISCONNECTED");}
 }
