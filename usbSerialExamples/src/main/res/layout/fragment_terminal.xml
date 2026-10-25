@@ -1,128 +1,47 @@
 <?xml version="1.0" encoding="utf-8"?>
-<LinearLayout
-    xmlns:android="http://schemas.android.com/apk/res/android"
-    xmlns:app="http://schemas.android.com/apk/res-auto"
+<ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:orientation="vertical">
-
-    <LinearLayout
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:orientation="horizontal">
-
-        <ToggleButton
-            android:id="@+id/controlLineRts"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:minWidth="48sp"
-            android:textOff="RTS"
-            android:textOn="RTS" />
-
-        <ToggleButton
-            android:id="@+id/controlLineCts"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:minWidth="48sp"
-            android:clickable="false"
-            android:textColor="@android:color/secondary_text_dark"
-            android:textOff="CTS"
-            android:textOn="CTS" />
-
-        <View
-            android:layout_height="match_parent"
-            android:layout_width="6dp" />
-
-        <ToggleButton
-            android:id="@+id/controlLineDtr"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:minWidth="48sp"
-            android:textOff="DTR"
-            android:textOn="DTR" />
-
-        <ToggleButton
-            android:id="@+id/controlLineDsr"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:clickable="false"
-            android:minWidth="48sp"
-            android:textColor="@android:color/secondary_text_dark"
-            android:textOff="DSR"
-            android:textOn="DSR" />
-
-        <View
-            android:layout_height="match_parent"
-            android:layout_width="6dp" />
-
-        <ToggleButton
-            android:id="@+id/controlLineCd"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:clickable="false"
-            android:minWidth="48sp"
-            android:textColor="@android:color/secondary_text_dark"
-            android:textOff="CD"
-            android:textOn="CD" />
-
-        <ToggleButton
-            android:id="@+id/controlLineRi"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:minWidth="48sp"
-            android:clickable="false"
-            android:textColor="@android:color/secondary_text_dark"
-            android:textOff="RI"
-            android:textOn="RI" />
-
+    android:background="#0F1115">
+    <LinearLayout android:orientation="vertical" android:layout_width="match_parent" android:layout_height="wrap_content" android:padding="8dp">
+        <LinearLayout android:layout_width="match_parent" android:layout_height="48dp" android:background="#1A1D24" android:orientation="horizontal" android:gravity="center_vertical" android:padding="12dp">
+            <View android:layout_width="10dp" android:layout_height="10dp" android:background="#00FF88"/>
+            <TextView android:layout_width="0dp" android:layout_weight="1" android:layout_height="wrap_content" android:text=" TARUNA V7.4 BOS - REAL DEG - OTG" android:textColor="#00FF88" android:fontFamily="monospace" android:textStyle="bold" android:layout_marginStart="8dp"/>
+            <TextView android:id="@+id/statusText" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="DISCONNECTED" android:textColor="#FF4444" android:textSize="10sp" android:fontFamily="monospace"/>
+        </LinearLayout>
+        <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="horizontal" android:layout_marginTop="8dp" android:weightSum="3">
+            <LinearLayout android:layout_width="0dp" android:layout_weight="1" android:layout_height="120dp" android:background="#1A1D24" android:orientation="vertical" android:gravity="center" android:layout_marginEnd="4dp" android:padding="8dp">
+                <TextView android:text="RPM" android:textColor="#888" android:textSize="10sp" android:layout_width="wrap_content" android:layout_height="wrap_content"/>
+                <TextView android:id="@+id/rpmValue" android:text="0" android:textColor="#00FF88" android:textSize="28sp" android:fontFamily="monospace" android:textStyle="bold" android:layout_width="wrap_content" android:layout_height="wrap_content"/>
+                <ProgressBar android:id="@+id/rpmBar" style="?android:attr/progressBarStyleHorizontal" android:layout_width="match_parent" android:layout_height="8dp" android:max="6500" android:progress="0" android:progressTint="#00FF88"/>
+                <TextView android:id="@+id/limiterText" android:text="LIMIT: NORMAL 6500" android:textColor="#666" android:textSize="9sp" android:layout_width="wrap_content" android:layout_height="wrap_content"/>
+            </LinearLayout>
+            <LinearLayout android:layout_width="0dp" android:layout_weight="1" android:layout_height="120dp" android:background="#1A1D24" android:orientation="vertical" android:gravity="center" android:layout_marginEnd="4dp" android:padding="8dp">
+                <TextView android:text="MAP" android:textColor="#888" android:textSize="10sp" android:layout_width="wrap_content" android:layout_height="wrap_content"/>
+                <TextView android:id="@+id/mapValue" android:text="0 kPa" android:textColor="#00E5FF" android:textSize="22sp" android:fontFamily="monospace" android:textStyle="bold" android:layout_width="wrap_content" android:layout_height="wrap_content"/>
+                <TextView android:id="@+id/dfcoText" android:text="DFCO: OFF" android:textColor="#555" android:textSize="9sp" android:layout_width="wrap_content" android:layout_height="wrap_content"/>
+            </LinearLayout>
+            <LinearLayout android:layout_width="0dp" android:layout_weight="1" android:layout_height="120dp" android:background="#1A1D24" android:orientation="vertical" android:gravity="center" android:padding="8dp">
+                <TextView android:text="ADVANCE" android:textColor="#888" android:textSize="10sp" android:layout_width="wrap_content" android:layout_height="wrap_content"/>
+                <TextView android:id="@+id/advValue" android:text="0°" android:textColor="#FF8C00" android:textSize="28sp" android:fontFamily="monospace" android:textStyle="bold" android:layout_width="wrap_content" android:layout_height="wrap_content"/>
+                <TextView android:text="REAL DEG" android:textColor="#666" android:textSize="9sp" android:layout_width="wrap_content" android:layout_height="wrap_content"/>
+            </LinearLayout>
+        </LinearLayout>
+        <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="horizontal" android:layout_marginTop="8dp">
+            <Button android:id="@+id/btnGet" android:text="GET MAP" android:layout_width="0dp" android:layout_weight="1" android:layout_height="40dp" android:textSize="11sp" android:layout_marginEnd="4dp"/>
+            <Button android:id="@+id/btnSave" android:text="SAVE EEPROM" android:layout_width="0dp" android:layout_weight="1" android:layout_height="40dp" android:textSize="11sp" android:backgroundTint="#00AA55" android:layout_marginEnd="4dp"/>
+            <Button android:id="@+id/btnLoad" android:text="LOAD DEFAULT" android:layout_width="0dp" android:layout_weight="1" android:layout_height="40dp" android:textSize="11sp" android:backgroundTint="#AA3333"/>
+        </LinearLayout>
+        <TextView android:id="@+id/liveCellInfo" android:text="Live Cell: RPM 500 / MAP 20 kPa" android:textColor="#00FF88" android:fontFamily="monospace" android:textSize="11sp" android:layout_width="match_parent" android:layout_height="wrap_content" android:background="#1A1D24" android:padding="8dp" android:layout_marginTop="8dp"/>
+        <HorizontalScrollView android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="8dp" android:background="#1A1D24">
+            <LinearLayout android:id="@+id/mapTableContainer" android:orientation="vertical" android:layout_width="wrap_content" android:layout_height="wrap_content" android:padding="4dp"/>
+        </HorizontalScrollView>
+        <ScrollView android:layout_width="match_parent" android:layout_height="120dp" android:background="#0A0A0A" android:layout_marginTop="8dp">
+            <TextView android:id="@+id/receive_text" android:text="$OK,V7.4 BOS ORIGINAL + REAL DEG + OTG READY*&#10;" android:textColor="#888" android:fontFamily="monospace" android:textSize="10sp" android:layout_width="match_parent" android:layout_height="wrap_content" android:padding="4dp"/>
+        </ScrollView>
+        <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="horizontal" android:layout_marginTop="8dp">
+            <EditText android:id="@+id/send_text" android:hint="$SET,0,0,19" android:textColor="#FFF" android:hintTextColor="#555" android:fontFamily="monospace" android:textSize="12sp" android:layout_width="0dp" android:layout_weight="1" android:layout_height="48dp" android:background="#1A1D24"/>
+            <Button android:id="@+id/send_btn" android:text="SEND" android:layout_width="80dp" android:layout_height="48dp" android:layout_marginStart="4dp"/>
+        </LinearLayout>
     </LinearLayout>
-
-    <View
-        android:layout_width="match_parent"
-        android:background="?android:attr/listDivider"
-        android:layout_height="2dp" />
-
-    <TextView
-        android:id="@+id/receive_text"
-        android:layout_width="match_parent"
-        android:layout_height="0dp"
-        android:layout_weight="1"
-        android:freezesText="true"
-        android:gravity="bottom"
-        android:scrollbars="vertical"
-        android:textAppearance="@style/TextAppearance.AppCompat.Medium"
-        android:typeface="monospace" />
-
-    <Button
-        android:id="@+id/receive_btn"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:text="Read" />
-
-    <View
-        android:layout_width="match_parent"
-        android:background="?android:attr/listDivider"
-        android:layout_height="2dp" />
-
-    <LinearLayout
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:orientation="horizontal">
-
-        <EditText
-            android:id="@+id/send_text"
-            android:layout_width="0dp"
-            android:layout_height="match_parent"
-            android:layout_weight="1"
-            android:inputType="text|textNoSuggestions"
-            android:singleLine="true" />
-
-        <ImageButton
-            android:id="@+id/send_btn"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            app:srcCompat="@drawable/ic_send_white_24dp" />
-    </LinearLayout>
-
-</LinearLayout>
-
+</ScrollView>
