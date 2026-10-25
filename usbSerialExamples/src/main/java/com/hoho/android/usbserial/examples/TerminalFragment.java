@@ -93,7 +93,7 @@ public class TerminalFragment extends Fragment implements SerialListener {
         // Header RPM
         LinearLayout header = new LinearLayout(getContext());
         header.setOrientation(LinearLayout.HORIZONTAL);
-        TextView corner = new TextView(getContext()); corner.setText("MAP\RPM "); corner.setWidth(160); corner.setTextColor(Color.GRAY); corner.setTextSize(9);
+        TextView corner = new TextView(getContext()); corner.setText("MAP/RPM "); corner.setWidth(160); corner.setTextColor(Color.GRAY); corner.setTextSize(9);
         header.addView(corner);
         for(int c=0;c<16;c++){ TextView tv=new TextView(getContext()); tv.setText(String.valueOf(RPM_GRID[c])); tv.setWidth(90); tv.setTextColor(Color.GRAY); tv.setTextSize(9); header.addView(tv);}
         mapTableContainer.addView(header);
